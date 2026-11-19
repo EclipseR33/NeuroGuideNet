@@ -182,8 +182,6 @@ def evaluate_model(model, data_loader, criterion, use_center_loss, center_loss_l
     loss_cnt = 0
     total_acc = 0
     acc_cnt = 0
-    total_vote_acc = 0
-    vote_acc_cnt = 0
     dl = tqdm(data_loader)
 
     confusion = ConfusionMatrix(num_classes=num_classes, labels=label_name)
@@ -224,14 +222,12 @@ def evaluate_model(model, data_loader, criterion, use_center_loss, center_loss_l
             y_pred = torch.stack(y_pred_list, dim=1)
             y_pred_cls = torch.argmax(y_pred, dim=-1)
             y_pred_cls = torch.stack([torch.argmax(torch.bincount(cls)) for cls in y_pred_cls], dim=0)
-            total_vote_acc += torch.sum(y_pred_cls == y.data).item()
-            vote_acc_cnt += x.shape[0]
             confusion.update(y_pred_cls.cpu().detach().numpy(), y.cpu().detach().numpy())
     if plot_matrix:
         if eval_name is None:
             eval_name = 'unknown'
         confusion.plot(os.path.join(log_dir, eval_name + '.png'))
-    return (total_loss / loss_cnt, total_acc / acc_cnt * 100, total_vote_acc / vote_acc_cnt * 100,
+    return (total_loss / loss_cnt, total_acc / acc_cnt * 100,
             confusion.summary(), {k: running_loss_dict[k] / loss_cnt for k in running_loss_dict})
 
 
@@ -240,8 +236,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
     set_seed(42)
 
     device = cfg['device']
-    if not os.path.exists(log_dir):
-        os.mkdir(log_dir)
+    os.makedirs(log_dir, exist_ok=True)
 
     if cfg['dataset']['name'] == 'BCIIV2a':
         random_flip = RandomFlipBCIIV2a(cfg['dataset']['label_name'],
@@ -266,7 +261,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
         if state_dict['result_df'] is None:
             result_df = {'fold': [],
                          'train loss': [], 'train acc': [], 'train kappa': [],
-                         'test loss': [], 'test acc': [], 'test acc vote': [], 'test kappa': []}
+                         'test loss': [], 'test acc': [], 'test kappa': []}
             state_dict['result_df'] = result_df
         else:
             result_df = state_dict['result_df']
@@ -274,7 +269,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
     else:
         result_df = {'fold': [],
                      'train loss': [], 'train acc': [], 'train kappa': [],
-                     'test loss': [], 'test acc': [], 'test acc vote': [], 'test kappa': []}
+                     'test loss': [], 'test acc': [], 'test kappa': []}
         loader = range(repeat)
     logger.info(f'loader {loader}')
     for i in loader:
@@ -346,7 +341,6 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
                         'train_kappa': [],
                         'test_loss': [],
                         'test_acc': [],
-                        'test_acc_vote': [],
                         'test_kappa': []}
 
         for epoch in range(cfg['train']['epoch']):
@@ -368,7 +362,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
                 num_classes=cfg['model']['num_class'],
                 label_name=cfg['dataset']['label_name']
             )
-            test_loss, test_acc, test_acc_vote, test_kappa, test_loss_dict = evaluate_model(
+            test_loss, test_acc, test_kappa, test_loss_dict = evaluate_model(
                 model=model,
                 data_loader=test_dl,
                 criterion=criterion,
@@ -388,7 +382,6 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
             metrics_dict['train_kappa'].append(train_kappa)
             metrics_dict['test_loss'].append(test_loss)
             metrics_dict['test_acc'].append(test_acc)
-            metrics_dict['test_acc_vote'].append(test_acc_vote)
             metrics_dict['test_kappa'].append(test_kappa)
 
             if (epoch + 1) % cfg['train']['save_every_n_epochs'] == 0:
@@ -405,8 +398,8 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
                 patience_cnt = 0
                 logger.info('Test acc from {:.2f} to {:.2f}'.format(
                     last_test_acc,
-                    test_acc_vote))
-                last_test_acc = test_acc_vote
+                    test_acc))
+                last_test_acc = test_acc
                 torch.save(model.state_dict(), os.path.join(cv_dir, 'best.pt'))
             else:
                 patience_cnt += 1
@@ -422,7 +415,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
 
             logger.info(
                 'Epoch:{}, train loss:{:.6f}, train acc:{:.2f}%, train kappa {:.2f} \n'
-                'test loss:{:.6f}, test acc:{:.2f}%, test acc vote:{:.2f}%, test kappa {:.2f}, \n'
+                'test loss:{:.6f}, test acc:{:.2f}%, test kappa {:.2f}, \n'
                 'train loss dict: {} \n'
                 'test loss dict: {} \n'
                 ', lr={}, patience {}'.format(
@@ -432,7 +425,6 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
                     train_kappa,
                     test_loss,
                     test_acc,
-                    test_acc_vote,
                     test_kappa,
                     str(train_loss_dict),
                     str(test_loss_dict),
@@ -446,7 +438,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
         model.load_state_dict(torch.load(os.path.join(cv_dir, 'best.pt')))
         logger.info('Load best params')
 
-        train_loss, train_acc, train_acc_vote, train_kappa, train_loss_dict = evaluate_model(
+        train_loss, train_acc, train_kappa, train_loss_dict = evaluate_model(
             model=model,
             data_loader=train_dl,
             criterion=criterion,
@@ -461,7 +453,7 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
             plot_matrix=True,
             eval_name='train'
         )
-        test_loss, test_acc, test_acc_vote, test_kappa, test_loss_dict = evaluate_model(
+        test_loss, test_acc, test_kappa, test_loss_dict = evaluate_model(
             model=model,
             data_loader=test_dl,
             criterion=criterion,
@@ -485,7 +477,6 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
         result_df['train kappa'].append(train_kappa)
         result_df['test loss'].append(test_loss)
         result_df['test acc'].append(test_acc)
-        result_df['test acc vote'].append(test_acc_vote)
         result_df['test kappa'].append(test_kappa)
 
         plt.figure()
@@ -504,11 +495,9 @@ def train(cfg, logger, log_dir, subject=None, state_dict=None, state_file=None,
         plt.figure()
         plt.plot(metrics_dict['train_acc'], label='train')
         plt.plot(metrics_dict['test_acc'], label='test')
-        plt.plot(metrics_dict['test_acc_vote'], label='test vote')
-        plt.title('Train {:.2f}% | Test {:.2f}% | Test vote {:.2f}%'.format(
+        plt.title('Train {:.2f}% | Test {:.2f}%'.format(
             max(metrics_dict['train_acc']),
-            max(metrics_dict['test_acc']),
-            max(metrics_dict['test_acc_vote'])
+            max(metrics_dict['test_acc'])
         ))
         plt.xlabel('Epoch')
         plt.ylabel('Acc')

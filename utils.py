@@ -99,8 +99,7 @@ def get_logger(exp_dir):
     logger.setLevel(logging.INFO)
 
     path = os.path.join(exp_dir, 'log.txt')
-    if not os.path.exists(exp_dir):
-        os.mkdir(exp_dir)
+    os.makedirs(exp_dir, exist_ok=True)
     if os.path.exists(path):
         os.remove(path)
     hdlr = logging.FileHandler(path)

@@ -4,9 +4,7 @@ from trainer import train
 from utils import get_logger
 
 import yaml
-import glob
 import os
-import torch
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
@@ -25,18 +23,7 @@ if __name__ == '__main__':
     logger = get_logger(log_dir)
     logger.info(cfg)
 
-    task = 'motorimagination'
-    # task = 'motorexecution'
-
     repeat = 5
-    # is_processed = False
-    logger.info(f'Task {task}')
-
-    # all_file, subject_list, run_list = check_get_subject_run(cfg['dataset']['root'],
-    #                                                          end_with=f'{task}_*.gdf')
-    #                                                          end_with=f'{task}_*.fif')
-    # run_select = {'train_test': ['run1', 'run2', 'run3', 'run4', 'run5',
-    #                              'run6', 'run7', 'run8', 'run9', 'run10']}
 
     if cfg['dataset']['name'] == 'BCIIV2a':
         subject_list = [str(i + 1) for i in range(9)]
@@ -48,7 +35,7 @@ if __name__ == '__main__':
 
     avg_df = {'subject': [],
               'train loss': [], 'train acc': [], 'train kappa': [],
-              'test loss': [], 'test acc': [], 'test acc vote': [], 'test kappa': []}
+              'test loss': [], 'test acc': [], 'test kappa': []}
     for s in subject_list:
         logger.info(s)
 
@@ -65,7 +52,6 @@ if __name__ == '__main__':
         avg_df['train kappa'].append(result_df['train kappa'].mean())
         avg_df['test loss'].append(result_df['test loss'].mean())
         avg_df['test acc'].append(result_df['test acc'].mean())
-        avg_df['test acc vote'].append(result_df['test acc vote'].mean())
         avg_df['test kappa'].append(result_df['test kappa'].mean())
 
     avg_df['subject'].append('_avg')

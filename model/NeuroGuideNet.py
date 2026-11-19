@@ -130,7 +130,7 @@ class CrossRegionFC_Block(nn.Module):
         self.T_conv_avg = Conv1DMultiKernel(in_ch, d_model, conv_kernels, dropout)
         self.res_conv = nn.Conv2d(in_ch, d_model, 1) \
             if in_ch != d_model else nn.Identity()
-        self.ST_avg_pool = nn.AvgPool1d(pool_size)
+        self.T_avg_pool = nn.AvgPool1d(pool_size)
 
         self.spatial_attention = AttentionLayer(d_model, n_heads, dropout)
 
@@ -141,6 +141,7 @@ class CrossRegionFC_Block(nn.Module):
         conv_input = x.permute(0, 2, 1, 3)
         conv_input = conv_input.reshape(-1, dim, seq_len)
 
+        # conv_input: [batch_size * channels, dims, seq_len]
         conv_output = self.T_conv(conv_input) + self.res_conv(conv_input)
         conv_output = self.T_avg_pool(conv_output)
 
@@ -152,6 +153,7 @@ class CrossRegionFC_Block(nn.Module):
         attn_input = x.permute(0, 3, 2, 1)
         attn_input = attn_input.reshape(-1, channels, dim)
 
+        # attn_input: [batch_size * seq_len, channels, dims]
         attn_out = self.dropout(self.spatial_attention(attn_input)) + attn_input
 
         attn_out = attn_out.reshape(batch_size, seq_len, channels, dim)
@@ -380,9 +382,11 @@ class LocalRegionSTModule(nn.Module):
         for i, ch_size in enumerate(self.ch_parcellation_size):
             tensor_index = self.ch_idx_parcellation[start_idx:start_idx + ch_size]
             parcellation_output = self.RST_module[i](x[:, :, tensor_index])
+            # parcellation_output: [batch_size, block_dims[i], 1, seq2]
             output_list.append(parcellation_output)
             start_idx += ch_size
         output = torch.cat(output_list, dim=2)
+        # output: [batch_size, block_dims[-1], n_parcellation, seq2]
         return output
 
 
@@ -477,21 +481,57 @@ class NeuroGuideNet(nn.Module):
         return fusion_output
 
     def forward(self, x):
+        # x: [batch_size, n_channel, seq, 1]
         x = x.permute(0, 3, 1, 2)
         if self.input_conv is not None:
             x = self.input_conv(x)
 
-        local_output = self.localRST_module(x)
-        global_spatial_output = self.globalRST_module(x)
-        spatial_output = self.spatial_fusion(local_output, global_spatial_output)
+        # x: [batch_size, in_ch, n_channel, seq]
+        localRST_output = self.localRST_module(x)
+        globalRST_output = self.globalRST_module(x)
+        # localRST_output: [batch_size, in_ch, n_parcellation, seq2]
+        # globalRST_output: [batch_size, in_ch, n_parcellation, seq2]
+        RST_output = self.spatial_fusion(localRST_output, globalRST_output)
 
-        ST_output = self.cross_region_fc_module(spatial_output)
+        CRFC_output = self.cross_region_fc_module(RST_output)
         if self.use_conv_fuse:
-            ST_output = self.adaptive_spatial_conv(ST_output)
+            CRFC_output = self.adaptive_spatial_conv(CRFC_output)
 
-        mi_emb = ST_output.squeeze(dim=2)
+        mi_emb = CRFC_output.squeeze(dim=2)
         mi_emb = self.avg_pool(mi_emb)
         predict = self.classifier_mi(mi_emb)
 
         output_dict = {'mi_emb': mi_emb, 'subject_emb': None}
         return predict, output_dict
+
+
+if __name__ == '__main__':
+    import argparse
+    import yaml
+
+    parser = argparse.ArgumentParser(description='Test NeuroGuideNet output shapes.')
+    parser.add_argument('--config', default='../config/BCIIV2a_NeuroGuideNet.yaml')
+    args = parser.parse_args()
+
+    config_file = args.config
+    with open(config_file, 'r') as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+    cfg['device'] = 'cpu'
+    cfg['model']['device'] = cfg['device']
+
+    model = NeuroGuideNet(cfg['model'], cfg['dataset']['name']).to(cfg['device'])
+    model.eval()
+
+    x = torch.randn(
+        cfg['dataset']['test_batch_size'],
+        cfg['model']['n_channels'],
+        int(cfg['dataset']['window_size'] * cfg['dataset']['fs']),
+        cfg['model']['in_channels'],
+        device=cfg['device'],
+    )
+    print(f'Input shape: {x.shape}')
+    with torch.no_grad():
+        predict, output_dict = model(x)
+    print(f'Prediction shape: {predict.shape}')
+    for name, output in output_dict.items():
+        print(f'{name} shape: {output.shape if output is not None else None}')
