@@ -1,6 +1,6 @@
 dataset:
   name: 'BCIIV2a'
-  root: '/Users/wang-zi/Datasets/BCICIV_2a_gdf'
+  root: 'Dataset\BCICIV_2a_gdf'
   batch_size: 64
   test_batch_size: 64
   num_workers: 0

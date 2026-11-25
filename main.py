@@ -23,7 +23,7 @@ if __name__ == '__main__':
     logger = get_logger(log_dir)
     logger.info(cfg)
 
-    repeat = 5
+    repeat = 1
 
     if cfg['dataset']['name'] == 'BCIIV2a':
         subject_list = [str(i + 1) for i in range(9)]
