@@ -1,5 +1,23 @@
 # NeuroGuideNet
 
+## Paper overview
+
+**NeuroGuideNet: A functionally-guided hierarchical network with global–local collaboration for EEG motor imagery decoding**
+
+Zihang Wang, Shichao Cheng, Hongyu Liu, Zhangze Xu, Xin Zhou, and Jianhai Zhang. [Paper (DOI)](https://doi.org/10.1016/j.bspc.2026.111897)
+
+This repository contains the official implementation of NeuroGuideNet. The paper’s first author, Zihang Wang, provided the code.
+
+NeuroGuideNet decodes motor imagery from EEG by learning patterns within and across functional brain regions. It groups EEG channels by electrode location and the neuroanatomy of motor imagery, then extracts spatiotemporal features at multiple scales within each group. A global representation modulates these regional features, and spatiotemporal attention combines information across regions.
+
+The paper reports average accuracy improvements of 1.83% on BCIC-IV-2A and 1.7% on OpenBMI over the compared state-of-the-art methods. Ablation studies also support the contribution of the individual modules and the anatomically guided channel grouping.
+
+### Model architecture
+
+![NeuroGuideNet architecture overview](fig/framework_v8-2_overall.png)
+
+![EEG channel grouping by functional brain region](fig/Neuro-GuideNet_channel_split_v3_2.png)
+
 ## Dataset
 
 ### BCI Competition IV-2a dataset
@@ -48,3 +66,50 @@ OpenBMI/
 
 Set `dataset.root` in [the OpenBMI configuration](config/OpenBMI_NeuroGuideNet.yaml) to your local `OpenBMI/` directory.
 
+## Usage
+
+1. Prepare one of the datasets above and set `dataset.root` in its YAML file to the folder containing your recordings.
+2. In [main.py](main.py), select the matching `config_file`. BCI IV-2a is selected by default. For OpenBMI, switch to `config/OpenBMI_NeuroGuideNet.yaml`.
+3. Choose the device in the same file. The default is `cfg['device'] = 'cpu'`. For an NVIDIA GPU with CUDA-enabled PyTorch, set it to `'cuda'`.
+4. By default, the script trains and evaluates a separate model for each of the 9 BCI IV-2a subjects or 54 OpenBMI subjects. For a single-subject run, set `subject_list = ['1']` immediately before the line that logs the subject list. To change the training duration, edit `train.epoch` in the selected YAML file.
+5. From the repository root, run the experiment.
+
+   ```bash
+   python main.py
+   ```
+
+After all selected subjects finish, open `log/Temp/BCIIV2a_avg_df.csv` or `log/Temp/OpenBMI_avg_df.csv`. Each subject row reports training and test loss, accuracy, and Cohen’s kappa. The final `_avg` row gives the mean across the selected subjects.
+
+## Project structure
+
+[main.py](main.py) runs motor imagery classification experiments one subject at a time. It reads the selected YAML file from [config/](config/), calls the trainer, and writes per-subject metrics and their averages to a CSV file under `log/Temp/`.
+
+| File | Purpose |
+| --- | --- |
+| [trainer.py](trainer.py) | Builds the data loaders, trains the model, and evaluates loss, accuracy, and Cohen’s kappa. |
+| [model/NeuroGuideNet.py](model/NeuroGuideNet.py) | Defines the channel groups for each dataset and the network that extracts features within brain regions and learns relationships across regions. |
+| [dataset/BCIIV2a_data_gdf.py](dataset/BCIIV2a_data_gdf.py) | Reads BCI IV-2a GDF recordings and MAT labels, segments the EEG into trials, and exposes them as a PyTorch dataset. |
+| [dataset/OpenBMI_data_mat.py](dataset/OpenBMI_data_mat.py) | Reads OpenBMI MAT files by subject and session, resamples and filters the EEG, and extracts labeled trials. |
+| [dataset/OpenBMI_download.py](dataset/OpenBMI_download.py) | Downloads motor imagery recordings for both OpenBMI sessions into the selected directory. |
+| [transform.py](transform.py) | Implements EEG augmentations including random cropping, noise addition, segment reassembly, and left–right channel flips. |
+| [utils.py](utils.py) | Provides signal standardization, loss functions, learning rate scheduling, logging, and confusion matrix utilities. |
+
+## Citation
+
+If you use NeuroGuideNet in your research, please cite the following paper.
+
+```bibtex
+@article{WANG2027111897,
+title = {NeuroGuideNet: A functionally-guided hierarchical network with global–local collaboration for EEG motor imagery decoding},
+journal = {Biomedical Signal Processing and Control},
+volume = {131},
+pages = {111897},
+year = {2027},
+issn = {1746-8094},
+doi = {https://doi.org/10.1016/j.bspc.2026.111897},
+url = {https://www.sciencedirect.com/science/article/pii/S1746809426024559},
+author = {Zihang Wang and Shichao Cheng and Hongyu Liu and Zhangze Xu and Xin Zhou and Jianhai Zhang},
+keywords = {Brain–computer interface, Motor imagery, Neuroanatomical prior, Neural network},
+abstract = {Motor imagery-based brain–computer interface (MI-BCI) relies on decoding high-dimensional and noisy electroencephalography (EEG) signals that exhibit complex spatiotemporal dynamics. Existing deep learning approaches often emphasize temporal features while neglecting functional neuroanatomical priors, which may hinder the modeling of region-specific spatial patterns and inter-regional interactions associated with motor imagery. To address these issues, we propose NeuroGuideNet, a functionally-guided hierarchical network with global–local collaboration which integrates neuroanatomical knowledge into EEG decoding. Specifically, EEG signals are divided into several functional regions according to the neuroanatomy of motor imagery and electrode placement, enabling region-wise feature learning and emphasizing EEG representations from task-relevant functional regions. Then, a region-specific spatiotemporal feature extraction module captures multi-scale spatiotemporal dynamics within each region. Subsequently, a globally-guided cross-region feature collaboration and aggregation mechanism merges the features across regions using globally-conditioned feature modulation and spatiotemporal attention to model global dependencies. Extensive evaluations on the BCIC-IV-2A and OpenBMI datasets demonstrate that NeuroGuideNet outperforms state-of-the-art methods, with average accuracy improvements of 1.83% and 1.7%, respectively. Ablation studies further confirm the importance of each module and the neurophysiologically guided channel partitioning.}
+}
+```
