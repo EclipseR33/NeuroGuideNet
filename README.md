@@ -18,6 +18,29 @@ The paper reports average accuracy improvements of 1.83% on BCIC-IV-2A and 1.7% 
 
 ![EEG channel grouping by functional brain region](fig/Neuro-GuideNet_channel_split_v3_2.png)
 
+## Environment setup
+
+Use **Python 3.9**. The dependency versions in [requirement.txt](requirement.txt) were taken from the local Conda `Research` environment with Python 3.9.19 and PyTorch 2.3.1.
+
+From the repository root, create a Conda environment and install the dependencies. The commands below select the CPU build of PyTorch on Windows and Linux. The first pip command installs the PyTorch wheel, and the second resolves the project dependencies from PyPI.
+
+```bash
+conda create -n neuroguidenet python=3.9.19 pip
+conda activate neuroguidenet
+python -m pip install --no-deps torch==2.3.1 --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r requirement.txt
+python -m pip check
+```
+
+For an NVIDIA GPU with a driver that supports CUDA 12.1, use the CUDA 12.1 wheel below. After installing the dependencies, check CUDA availability and follow the device setting in [Usage](#usage). See the [official PyTorch 2.3.1 installation instructions](https://pytorch.org/get-started/previous-versions/#v231).
+
+```bash
+python -m pip install --no-deps torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+python -m pip install -r requirement.txt
+python -m pip check
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
 ## Dataset
 
 ### BCI Competition IV-2a dataset
@@ -62,7 +85,12 @@ OpenBMI/
 ```
 
 - **Manual download** — Download only the `*_EEG_MI.mat` files for the subjects and sessions you plan to use. The other files in the GigaDB record, including ERP and SSVEP recordings, can be skipped. Keep the original filenames and place the files directly in `OpenBMI/`.
-- **Scripted download** — Run [the OpenBMI download script](dataset/OpenBMI_download.py) from the repository root. It saves the MI files for both sessions directly in the directory specified by `--save-dir`.
+- **Scripted download** — Install the optional download dependency and run the script from the repository root. It saves the MI files for both sessions directly in the directory specified by `--save-dir`.
+
+  ```bash
+  python -m pip install pySmartDL==1.3.4
+  python dataset/OpenBMI_download.py --save-dir Dataset/OpenBMI
+  ```
 
 Set `dataset.root` in [the OpenBMI configuration](config/OpenBMI_NeuroGuideNet.yaml) to your local `OpenBMI/` directory.
 
